@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfinder — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #050810;
+      --bg2: #080d1a;
+      --surface: #0d1424;
+      --surface2: #111827;
+      --border: #1a2540;
+      --cyan: #00d4ff;
+      --cyan-dim: rgba(0,212,255,0.12);
+      --amber: #f59e0b;
+      --green: #10b981;
+      --red: #ef4444;
+      --purple: #8b5cf6;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --text-mid: #94a3b8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 24px 0;
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      z-index: 10;
+    }
+    .sidebar-logo {
+      padding: 0 20px 28px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .sidebar-section {
+      padding: 8px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-top: 16px;
+    }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 12px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-mid);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .nav-item:hover { background: var(--surface); color: var(--text); }
+    .nav-item.active {
+      background: var(--cyan-dim);
+      color: var(--cyan);
+    }
+    .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-badge {
+      margin-left: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 1px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .nav-badge.new {
+      background: rgba(16,185,129,0.1);
+      border-color: rgba(16,185,129,0.3);
+      color: var(--green);
+    }
+
+    .sidebar-bottom {
+      margin-top: auto;
+      padding: 16px 12px 0;
+      border-top: 1px solid var(--border);
+    }
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .user-card:hover { background: var(--surface); }
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(0,212,255,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan);
+      flex-shrink: 0;
+    }
+    .user-info { flex: 1; min-width: 0; }
+    .user-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .user-plan {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .main {
+      margin-left: 220px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      height: 60px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      background: rgba(5,8,16,0.8);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .topbar-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-new-sim {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: var(--cyan);
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #000;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-new-sim:hover {
+      background: transparent;
+      color: var(--cyan);
+    }
+
+    .content {
+      padding: 32px;
+      flex: 1;
+    }
+
+    /* ── WELCOME ── */
+    .welcome-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .welcome-text h2 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .welcome-text p {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* ── STATS CARDS ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .stat-card:hover { border-color: rgba(0,212,255,0.3); }
+    .stat-card-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    .stat-card-value {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .stat-card-change {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .stat-card-change.up { color: var(--green); }
+    .stat-card-change.neutral { color: var(--text-dim); }
+    .stat-card-bg-icon {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 36px;
+      opacity: 0.05;
+    }
+
+    /* ── GRID ── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+    }
+
+    /* ── RECENT SIMS ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+    .panel-action {
+      font-size: 13px;
+      color: var(--cyan);
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .sim-list { list-style: none; }
+    .sim-item {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .sim-item:last-child { border-bottom: none; }
+    .sim-item:hover { background: rgba(0,212,255,0.03); }
+    .sim-icon-wrap {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .sim-info-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+    .sim-info-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+    }
+    .sim-badge {
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+    }
+    .badge-success {
+      background: rgba(16,185,129,0.1);
+      color: var(--green);
+      border: 1px solid rgba(16,185,129,0.25);
+    }
+    .badge-warn {
+      background: rgba(245,158,11,0.1);
+      color: var(--amber);
+      border: 1px solid rgba(245,158,11,0.25);
+    }
+    .badge-fail {
+      background: rgba(239,68,68,0.1);
+      color: var(--red);
+      border: 1px solid rgba(239,68,68,0.25);
+    }
+
+    /* ── USAGE + QUICK ACTIONS ── */
+    .side-panels {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .usage-bar-wrap { padding: 20px 24px; }
+    .usage-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-mid);
+      margin-bottom: 10px;
+    }
+    .usage-bar-label span { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .usage-bar-track {
+      height: 6px;
+      background: var(--bg2);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .usage-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--cyan), #0099ff);
+      transition: width 1s ease;
+    }
+
+    .quick-actions { list-style: none; padding: 0 12px 12px; }
+    .qa-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .qa-item:hover { background: var(--bg2); }
+    .qa-icon {
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .qa-cyan { background: rgba(0,212,255,0.1); }
+    .qa-green { background: rgba(16,185,129,0.1); }
+    .qa-amber { background: rgba(245,158,11,0.1); }
+    .qa-purple { background: rgba(139,92,246,0.1); }
+    .qa-text {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-mid);
+    }
+
+    /* ── ACTIVITY FEED ── */
+    .activity-feed { padding: 0 24px 16px; }
+    .activity-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .dot-cyan { background: var(--cyan); }
+    .dot-green { background: var(--green); }
+    .dot-amber { background: var(--amber); }
+    .activity-text {
+      font-size: 13px;
+      color: var(--text-mid);
+      line-height: 1.4;
+    }
+    .activity-text strong { color: var(--text); font-weight: 600; }
+    .activity-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 3px;
+    }
+
+    /* MINI SIM CANVAS */
+    .mini-sim-wrap {
+      padding: 16px 24px;
+    }
+    canvas#miniSim {
+      width: 100%;
+      height: 140px;
+      border-radius: 8px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px;
+      text-align: center;
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-mid);
+      margin-bottom: 8px;
+    }
+    .empty-desc { font-size: 13px; color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
+        <polygon points="16,2 26,8 26,24 16,30 6,24 6,8" stroke="#00d4ff" stroke-width="1.5" fill="none" opacity="0.4"/>
+        <circle cx="16" cy="16" r="5" fill="#00d4ff"/>
+      </svg>
+      PATHFINDER
+    </div>
+
+    <div class="sidebar-section">Main</div>
+    <nav class="sidebar-nav">
+      <a href="dashboard.html" class="nav-item active">
+        <span class="nav-icon">⬛</span> Dashboard
+      </a>
+      <a href="simulator.html" class="nav-item">
+        <span class="nav-icon">▶</span> New Simulation
+        <span class="nav-badge new">New</span>
+      </a>
+      <a href="history.html" class="nav-item">
+        <span class="nav-icon">📋</span> My Simulations
+        <span class="nav-badge" id="simCount">0</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-section">Tools</div>
+    <nav class="sidebar-nav">
+      <a href="environments.html" class="nav-item">
+        <span class="nav-icon">🗺️</span> Environments
+      </a>
+      <a href="algorithms.html" class="nav-item">
+        <span class="nav-icon">🧠</span> Algorithm Library
+      </a>
+      <a href="reports.html" class="nav-item">
+        <span class="nav-icon">📊</span> Reports
+      </a>
+    </nav>
+
+    <div class="sidebar-section">Account</div>
+    <nav class="sidebar-nav">
+      <a href="settings.html" class="nav-item">
+        <span class="nav-icon">⚙️</span> Settings
+      </a>
+      <a href="docs.html" class="nav-item">
+        <span class="nav-icon">📖</span> Documentation
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="user-card" id="userCard">
+        <div class="avatar" id="userAvatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="userName">Loading...</div>
+          <div class="user-plan" id="userPlan">FREE PLAN</div>
+        </div>
+        <span style="color:var(--text-dim);font-size:12px;" onclick="handleSignOut()" title="Sign Out">⏻</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title">Mission Control</div>
+      <div class="topbar-actions">
+        <a href="simulator.html" class="btn-new-sim">
+          ＋ New Simulation
+        </a>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="welcome-bar">
+        <div class="welcome-text">
+          <h2>Good morning, <span id="welcomeName">Pilot</span> 👋</h2>
+          <p>You have <span id="simCountText">0</span> simulations completed. Let's fly.</p>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-card-label">Total Simulations</div>
+          <div class="stat-card-value" id="statTotal">0</div>
+          <div class="stat-card-change neutral">All time</div>
+          <div class="stat-card-bg-icon">▶</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Successful Runs</div>
+          <div class="stat-card-value" id="statSuccess">0</div>
+          <div class="stat-card-change up">✓ Nominal</div>
+          <div class="stat-card-bg-icon">✓</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Algorithms Tested</div>
+          <div class="stat-card-value" id="statAlgos">0</div>
+          <div class="stat-card-change neutral">Unique scripts</div>
+          <div class="stat-card-bg-icon">🧠</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Sim Time (min)</div>
+          <div class="stat-card-value" id="statTime">0</div>
+          <div class="stat-card-change neutral">Accumulated</div>
+          <div class="stat-card-bg-icon">⏱</div>
+        </div>
+      </div>
+
+      <!-- GRID -->
+      <div class="dashboard-grid">
+        <!-- LEFT: RECENT SIMS -->
+        <div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Recent Simulations</div>
+              <a href="history.html" class="panel-action">View all →</a>
+            </div>
+            <ul class="sim-list" id="simList">
+              <!-- Populated by JS -->
+              <li class="empty-state">
+                <div class="empty-icon">🚁</div>
+                <div class="empty-title">No simulations yet</div>
+                <div class="empty-desc">Run your first algorithm simulation to see it here.</div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- RIGHT PANELS -->
+        <div class="side-panels">
+          <!-- Usage -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Monthly Usage</div>
+              <a href="settings.html" class="panel-action">Upgrade</a>
+            </div>
+            <div class="usage-bar-wrap">
+              <div class="usage-bar-label">
+                Simulations <span id="usageText">0 / 5</span>
+              </div>
+              <div class="usage-bar-track">
+                <div class="usage-bar-fill" id="usageBar" style="width: 0%"></div>
+              </div>
+              <div style="margin-top:10px;font-size:12px;color:var(--text-dim);">
+                Free plan · <a href="settings.html" style="color:var(--cyan);text-decoration:none;">Upgrade to Pro →</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Quick Start</div>
+            </div>
+            <ul class="quick-actions">
+              <li><a href="simulator.html" class="qa-item">
+                <div class="qa-icon qa-cyan">▶</div>
+                <span class="qa-text">Launch Simulator</span>
+              </a></li>
+              <li><a href="simulator.html?template=pid" class="qa-item">
+                <div class="qa-icon qa-green">🎯</div>
+                <span class="qa-text">PID Controller Template</span>
+              </a></li>
+              <li><a href="simulator.html?template=swarm" class="qa-item">
+                <div class="qa-icon qa-amber">🐝</div>
+                <span class="qa-text">Swarm Algorithm Demo</span>
+              </a></li>
+              <li><a href="simulator.html?template=avoidance" class="qa-item">
+                <div class="qa-icon qa-purple">⚡</div>
+                <span class="qa-text">Obstacle Avoidance Demo</span>
+              </a></li>
+            </ul>
+          </div>
+
+          <!-- Live Mini Sim -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Live Preview</div>
+              <a href="simulator.html" class="panel-action">Open →</a>
+            </div>
+            <div class="mini-sim-wrap">
+              <canvas id="miniSim"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ── SUPABASE ──
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { window.location.href = 'auth.html'; return; }
+
+      const user = session.user;
+      const meta = user.user_metadata || {};
+      const name = (meta.first_name || user.email.split('@')[0]);
+      const initials = name.charAt(0).toUpperCase();
+
+      document.getElementById('userName').textContent = name;
+      document.getElementById('userAvatar').textContent = initials;
+      document.getElementById('welcomeName').textContent = name;
+
+      // Load simulations from Supabase
+      const { data: sims } = await supabase
+        .from('simulations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (sims && sims.length > 0) {
+        renderSimulations(sims);
+        updateStats(sims);
+      }
+    }
+
+    function renderSimulations(sims) {
+      const list = document.getElementById('simList');
+      const statusBadge = (s) => {
+        if (s === 'success') return '<span class="sim-badge badge-success">NOMINAL</span>';
+        if (s === 'warning') return '<span class="sim-badge badge-warn">WARNINGS</span>';
+        return '<span class="sim-badge badge-fail">FAILED</span>';
+      };
+      list.innerHTML = sims.map(sim => `
+        <li>
+          <a href="simulator.html?id=${sim.id}" class="sim-item">
+            <div class="sim-icon-wrap">🚁</div>
+            <div>
+              <div class="sim-info-name">${sim.name || 'Untitled Simulation'}</div>
+              <div class="sim-info-meta">${new Date(sim.created_at).toLocaleDateString()} · ${sim.duration || 0}s runtime</div>
+            </div>
+            ${statusBadge(sim.status)}
+          </a>
+        </li>
+      `).join('');
+    }
+
+    function updateStats(sims) {
+      document.getElementById('statTotal').textContent = sims.length;
+      const successes = sims.filter(s => s.status === 'success').length;
+      document.getElementById('statSuccess').textContent = successes;
+      document.getElementById('statAlgos').textContent = new Set(sims.map(s => s.algorithm_hash)).size;
+      const totalTime = sims.reduce((a, s) => a + (s.duration || 0), 0);
+      document.getElementById('statTime').textContent = Math.round(totalTime / 60);
+      const count = sims.length;
+      document.getElementById('simCount').textContent = count;
+      document.getElementById('simCountText').textContent = count;
+      document.getElementById('usageText').textContent = `${Math.min(count, 5)} / 5`;
+      document.getElementById('usageBar').style.width = `${Math.min(count / 5 * 100, 100)}%`;
+    }
+
+    async function handleSignOut() {
+      await supabase.auth.signOut();
+      window.location.href = 'auth.html';
+    }
+
+    init();
+
+    // ── MINI SIM CANVAS ──
+    const canvas = document.getElementById('miniSim');
+    const ctx = canvas.getContext('2d');
+    function resizeMini() {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = 140;
+    }
+    resizeMini();
+    let mt = 0;
+    const mdrone = { x: 40, y: 70 };
+    const mwps = [[60,30],[120,80],[180,40],[240,90],[280,50]];
+    let mwpIdx = 0;
+    const mtrail = [];
+
+    function miniLoop() {
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#080d1a';
+      ctx.fillRect(0, 0, W, H);
+
+      // Grid
+      ctx.strokeStyle = 'rgba(0,212,255,0.06)'; ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+      // Waypoints
+      mwps.forEach((wp, i) => {
+        ctx.beginPath();
+        ctx.arc(wp[0], wp[1], i === mwpIdx ? 5 : 3, 0, Math.PI * 2);
+        ctx.fillStyle = i < mwpIdx ? 'rgba(16,185,129,0.4)' : i === mwpIdx ? '#00d4ff' : 'rgba(0,212,255,0.3)';
+        ctx.fill();
+      });
+
+      // Trail
+      for (let i = 1; i < mtrail.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(mtrail[i-1][0], mtrail[i-1][1]);
+        ctx.lineTo(mtrail[i][0], mtrail[i][1]);
+        ctx.strokeStyle = `rgba(0,212,255,${i/mtrail.length * 0.5})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      // Drone dot
+      ctx.beginPath();
+      ctx.arc(mdrone.x, mdrone.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,212,255,0.2)';
+      ctx.fill();
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Update
+      if (mwpIdx < mwps.length) {
+        const tx = mwps[mwpIdx][0], ty = mwps[mwpIdx][1];
+        const dx = tx - mdrone.x, dy = ty - mdrone.y;
+        if (Math.hypot(dx, dy) < 8) mwpIdx++;
+        else {
+          mdrone.x += dx * 0.04;
+          mdrone.y += dy * 0.04;
+        }
+      } else {
+        mwpIdx = 0;
+        mtrail.length = 0;
+        mdrone.x = mwps[0][0]; mdrone.y = mwps[0][1];
+      }
+      mtrail.push([mdrone.x, mdrone.y]);
+      if (mtrail.length > 60) mtrail.shift();
+
+      mt++;
+      requestAnimationFrame(miniLoop);
+    }
+    miniLoop();
+  </script>
+</body>
+</html>

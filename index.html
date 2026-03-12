@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfinder — Drone Simulation Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050810;
+      --bg2: #080d1a;
+      --surface: #0d1424;
+      --border: #1a2540;
+      --cyan: #00d4ff;
+      --cyan-dim: rgba(0, 212, 255, 0.15);
+      --amber: #f59e0b;
+      --green: #10b981;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --text-mid: #94a3b8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── NOISE TEXTURE ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* ── GRID BACKGROUND ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      height: 64px;
+      background: rgba(5,8,16,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      position: relative;
+    }
+    .logo-icon svg { width: 100%; height: 100%; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--cyan); }
+    .nav-cta {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 9px 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-mid);
+    }
+    .btn-ghost:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-primary {
+      background: var(--cyan);
+      border: 1px solid var(--cyan);
+      color: #000;
+    }
+    .btn-primary:hover {
+      background: transparent;
+      color: var(--cyan);
+    }
+    .btn-lg {
+      font-size: 15px;
+      padding: 14px 32px;
+    }
+    .btn-outline-cyan {
+      background: transparent;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-outline-cyan:hover {
+      background: var(--cyan-dim);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 40px 60px;
+      overflow: hidden;
+      z-index: 1;
+    }
+    .hero-glow {
+      position: absolute;
+      width: 800px; height: 800px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .hero-radar {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .radar-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(0,212,255,0.08);
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+    }
+    .radar-ring:nth-child(1) { width: 150px; height: 150px; }
+    .radar-ring:nth-child(2) { width: 300px; height: 300px; }
+    .radar-ring:nth-child(3) { width: 450px; height: 450px; }
+    .radar-ring:nth-child(4) { width: 600px; height: 600px; border-color: rgba(0,212,255,0.04); }
+    .radar-sweep {
+      position: absolute;
+      width: 300px; height: 300px;
+      top: 50%; left: 50%;
+      transform-origin: 0% 0%;
+      animation: sweep 4s linear infinite;
+    }
+    .radar-sweep::after {
+      content: '';
+      position: absolute;
+      width: 100%; height: 100%;
+      background: conic-gradient(from 0deg, transparent 0deg, rgba(0,212,255,0.12) 40deg, transparent 60deg);
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+    }
+    @keyframes sweep {
+      from { transform: rotate(0deg) translate(-50%, -50%); }
+      to { transform: rotate(360deg) translate(-50%, -50%); }
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      letter-spacing: 0.1em;
+      margin-bottom: 32px;
+      animation: fadeUp 0.8s ease both;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      animation: pulse 2s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.4); }
+    }
+    .hero h1 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: clamp(56px, 8vw, 96px);
+      font-weight: 700;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+      animation: fadeUp 0.8s ease 0.1s both;
+    }
+    .hero h1 .line-accent { color: var(--cyan); }
+    .hero h1 .line-dim { color: var(--text-dim); font-weight: 300; }
+    .hero-sub {
+      max-width: 560px;
+      font-size: 18px;
+      font-weight: 300;
+      color: var(--text-mid);
+      line-height: 1.6;
+      margin-bottom: 48px;
+      animation: fadeUp 0.8s ease 0.2s both;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeUp 0.8s ease 0.3s both;
+    }
+    .hero-stats {
+      display: flex;
+      gap: 64px;
+      margin-top: 72px;
+      animation: fadeUp 0.8s ease 0.4s both;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .stat-value span { color: var(--cyan); }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .hero-divider {
+      width: 1px;
+      height: 40px;
+      background: var(--border);
+      align-self: center;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SIMULATOR PREVIEW ── */
+    .preview-section {
+      position: relative;
+      z-index: 1;
+      padding: 0 40px 120px;
+    }
+    .preview-window {
+      max-width: 1100px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(0,212,255,0.05),
+        0 40px 80px rgba(0,0,0,0.6),
+        0 0 100px rgba(0,212,255,0.04);
+      animation: fadeUp 1s ease 0.5s both;
+    }
+    .window-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .titlebar-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #28c840; }
+    .titlebar-title {
+      flex: 1;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .window-body {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      height: 480px;
+      background: var(--bg2);
+    }
+    .code-panel {
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow: hidden;
+    }
+    .code-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .panel-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--cyan);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .code-block {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      color: var(--text-mid);
+      white-space: pre;
+    }
+    .code-block .kw { color: #c792ea; }
+    .code-block .fn { color: #82aaff; }
+    .code-block .str { color: #c3e88d; }
+    .code-block .num { color: #f78c6c; }
+    .code-block .cm { color: #546e7a; }
+    .code-block .var { color: var(--text); }
+    .code-block .type { color: var(--amber); }
+
+    .sim-panel {
+      position: relative;
+      overflow: hidden;
+    }
+    .sim-canvas-mock {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    canvas#heroCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .sim-overlay-hud {
+      position: absolute;
+      top: 12px; left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .hud-box {
+      background: rgba(8,13,26,0.8);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+    }
+    .hud-label { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+    .hud-value { color: var(--cyan); font-weight: 700; font-size: 14px; }
+
+    /* ── SECTION LAYOUT ── */
+    section {
+      position: relative;
+      z-index: 1;
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .section-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 700;
+      line-height: 1.05;
+      color: var(--text);
+    }
+    .section-title em {
+      font-style: normal;
+      color: var(--cyan);
+    }
+    .section-desc {
+      max-width: 520px;
+      margin: 16px auto 0;
+      font-size: 16px;
+      color: var(--text-mid);
+      font-weight: 300;
+      line-height: 1.6;
+    }
+
+    /* ── FEATURES ── */
+    .features {
+      padding: 120px 40px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .feature-card {
+      background: var(--bg2);
+      padding: 36px 32px;
+      transition: background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover { background: var(--surface); }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 20px;
+      background: var(--surface);
+    }
+    .feature-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 10px;
+      letter-spacing: 0.02em;
+    }
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+    .feature-tag {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--green);
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.2);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-it-works {
+      padding: 120px 40px;
+      background: linear-gradient(180deg, transparent, rgba(0,212,255,0.02), transparent);
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), var(--cyan), var(--border), transparent);
+    }
+    .step {
+      text-align: center;
+      position: relative;
+    }
+    .step-num {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--cyan);
+      margin: 0 auto 20px;
+      position: relative;
+      z-index: 1;
+      transition: all 0.3s;
+    }
+    .step:hover .step-num {
+      background: var(--cyan-dim);
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0,212,255,0.2);
+    }
+    .step-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+    .step-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      font-weight: 300;
+    }
+
+    /* ── USE CASES ── */
+    .use-cases {
+      padding: 120px 40px;
+    }
+    .cases-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .case-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 36px;
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+    .case-card:hover {
+      border-color: rgba(0,212,255,0.3);
+      transform: translateY(-2px);
+    }
+    .case-icon-wrap {
+      flex-shrink: 0;
+      width: 52px; height: 52px;
+      border-radius: 10px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .case-content h3 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .case-content p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      font-weight: 300;
+    }
+    .case-tag {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 3px 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      border-radius: 100px;
+    }
+    .tag-cyan { color: var(--cyan); background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); }
+    .tag-amber { color: var(--amber); background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); }
+    .tag-green { color: var(--green); background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2); }
+
+    /* ── PRICING ── */
+    .pricing {
+      padding: 120px 40px;
+      background: linear-gradient(180deg, transparent, rgba(0,212,255,0.015), transparent);
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .pricing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px 32px;
+      position: relative;
+      transition: border-color 0.3s;
+    }
+    .pricing-card.featured {
+      border-color: var(--cyan);
+      background: linear-gradient(180deg, rgba(0,212,255,0.05), var(--surface));
+    }
+    .pricing-card.featured::before {
+      content: 'MOST POPULAR';
+      position: absolute;
+      top: -1px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--cyan);
+      color: #000;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      padding: 4px 16px;
+      border-radius: 0 0 8px 8px;
+    }
+    .plan-name {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+    .pricing-card.featured .plan-name { color: var(--cyan); }
+    .price {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 52px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .price span { font-size: 20px; color: var(--text-dim); }
+    .price-note {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+    .plan-divider {
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 28px;
+    }
+    .plan-features {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .plan-features li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-mid);
+    }
+    .plan-features li .check { color: var(--green); font-size: 16px; }
+    .plan-features li.muted { color: var(--text-dim); }
+    .plan-features li.muted .check { color: var(--text-dim); }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      padding: 120px 40px;
+    }
+    .cta-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 16px;
+      padding: 72px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-inner::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: 20%; right: 20%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+    .cta-glow {
+      position: absolute;
+      width: 400px; height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,212,255,0.08) 0%, transparent 70%);
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+    }
+    .cta-inner h2 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: clamp(36px, 5vw, 52px);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .cta-inner p {
+      font-size: 16px;
+      color: var(--text-mid);
+      margin-bottom: 40px;
+      font-weight: 300;
+      position: relative;
+    }
+    .cta-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1;
+      position: relative;
+    }
+    .footer-logo {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-mid);
+      letter-spacing: 0.08em;
+    }
+    .footer-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--text-mid); }
+    .footer-copy {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── DRONE ANIMATION ── */
+    .drone-path {
+      stroke-dasharray: 400;
+      stroke-dashoffset: 400;
+      animation: drawPath 3s ease forwards 1s;
+    }
+    @keyframes drawPath {
+      to { stroke-dashoffset: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <!-- NAV -->
+  <nav>
+    <a href="index.html" class="nav-logo">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+        <polygon points="16,2 26,8 26,24 16,30 6,24 6,8" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.4"/>
+        <polygon points="16,6 22,10 22,22 16,26 10,22 10,10" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.7"/>
+        <circle cx="16" cy="16" r="4" fill="#00d4ff"/>
+        <line x1="16" y1="2" x2="16" y2="6" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="16" y1="26" x2="16" y2="30" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="6" y1="8" x2="10" y2="10" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="26" y1="8" x2="22" y2="10" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="6" y1="24" x2="10" y2="22" stroke="#00d4ff" stroke-width="1"/>
+        <line x1="26" y1="24" x2="22" y2="22" stroke="#00d4ff" stroke-width="1"/>
+      </svg>
+      PATHFINDER
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How it Works</a></li>
+      <li><a href="#use-cases">Use Cases</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="auth.html" class="btn btn-ghost">Sign In</a>
+      <a href="auth.html?mode=signup" class="btn btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-radar">
+      <div class="radar-ring"></div>
+      <div class="radar-ring"></div>
+      <div class="radar-ring"></div>
+      <div class="radar-ring"></div>
+      <div class="radar-sweep"></div>
+    </div>
+
+    <div class="hero-badge">
+      <div class="badge-dot"></div>
+      AI-POWERED DRONE SIMULATION PLATFORM
+    </div>
+
+    <h1>
+      <span class="line-accent">Simulate.</span><br>
+      <span>Analyze.</span><br>
+      <span class="line-dim">Deploy.</span>
+    </h1>
+
+    <p class="hero-sub">
+      Paste your autonomous drone algorithm and watch it come to life. Pathfinder analyzes your Python code and renders a real-time 3D simulation — before your drone ever leaves the ground.
+    </p>
+
+    <div class="hero-actions">
+      <a href="auth.html?mode=signup" class="btn btn-primary btn-lg">
+        ⬡ Start Simulating Free
+      </a>
+      <a href="simulator.html" class="btn btn-outline-cyan btn-lg">
+        ▶ Live Demo
+      </a>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-value">12<span>ms</span></div>
+        <div class="stat-label">Sim Latency</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="stat">
+        <div class="stat-value">3<span>D</span></div>
+        <div class="stat-label">Flight Render</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="stat">
+        <div class="stat-value">∞</div>
+        <div class="stat-label">Iterations</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="stat">
+        <div class="stat-value">99<span>%</span></div>
+        <div class="stat-label">Uptime SLA</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SIMULATOR PREVIEW -->
+  <div class="preview-section">
+    <div class="preview-window">
+      <div class="window-titlebar">
+        <div class="titlebar-dot dot-red"></div>
+        <div class="titlebar-dot dot-yellow"></div>
+        <div class="titlebar-dot dot-green"></div>
+        <div class="titlebar-title">pathfinder://simulator — autonomous_nav_v2.py</div>
+      </div>
+      <div class="window-body">
+        <!-- Code panel -->
+        <div class="code-panel">
+          <div class="code-panel-header">
+            <span class="panel-label">Algorithm Input</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--green);">● ANALYZING</span>
+          </div>
+          <div class="code-block"><span class="cm"># Autonomous Navigation Controller</span>
+<span class="kw">import</span> <span class="var">numpy</span> <span class="kw">as</span> <span class="var">np</span>
+<span class="kw">from</span> <span class="var">pathlib</span> <span class="kw">import</span> <span class="type">Path</span>
+
+<span class="kw">class</span> <span class="type">AutonomousNav</span>:
+  <span class="kw">def</span> <span class="fn">__init__</span>(<span class="var">self</span>, waypoints):
+    <span class="var">self</span>.waypoints = waypoints
+    <span class="var">self</span>.altitude = <span class="num">50.0</span>  <span class="cm"># meters</span>
+    <span class="var">self</span>.speed = <span class="num">12.5</span>    <span class="cm"># m/s</span>
+    <span class="var">self</span>.pid = <span class="type">PIDController</span>(
+      kp=<span class="num">0.8</span>, ki=<span class="num">0.02</span>, kd=<span class="num">0.1</span>
+    )
+
+  <span class="kw">def</span> <span class="fn">navigate</span>(<span class="var">self</span>, position):
+    target = <span class="var">self</span>.<span class="fn">get_next_waypoint</span>()
+    heading = <span class="var">self</span>.<span class="fn">calculate_bearing</span>(
+      position, target
+    )
+    correction = <span class="var">self</span>.pid.<span class="fn">update</span>(heading)
+    <span class="kw">return</span> <span class="var">self</span>.<span class="fn">apply_controls</span>(correction)
+
+  <span class="kw">def</span> <span class="fn">avoid_obstacle</span>(<span class="var">self</span>, sensor_data):
+    <span class="kw">if</span> sensor_data[<span class="str">'distance'</span>] &lt; <span class="num">5.0</span>:
+      <span class="kw">return</span> <span class="var">self</span>.<span class="fn">emergency_evade</span>()
+    <span class="kw">return</span> <span class="type">None</span></div>
+        </div>
+
+        <!-- Simulation canvas -->
+        <div class="sim-panel">
+          <canvas id="heroCanvas"></canvas>
+          <div class="sim-overlay-hud">
+            <div class="hud-box">
+              <div class="hud-label">Altitude</div>
+              <div class="hud-value" id="hudAlt">50.0m</div>
+            </div>
+            <div class="hud-box">
+              <div class="hud-label">Speed</div>
+              <div class="hud-value" id="hudSpd">12.5 m/s</div>
+            </div>
+            <div class="hud-box">
+              <div class="hud-label">Status</div>
+              <div class="hud-value" style="color:var(--green)">NOMINAL</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="features" id="features">
+    <div class="section-header">
+      <div class="section-eyebrow">// CAPABILITIES</div>
+      <h2 class="section-title">Everything you need to<br><em>test before you fly</em></h2>
+      <p class="section-desc">From algorithm ingestion to full 3D flight visualization — Pathfinder is a complete simulation stack for drone engineers.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <div class="feature-title">AI Algorithm Analysis</div>
+        <div class="feature-desc">Paste any Python drone control script. Our AI engine parses flight logic, PID parameters, waypoints, and behavioral trees to build a simulation model.</div>
+        <div class="feature-tag">Powered by Claude AI</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <div class="feature-title">3D Flight Simulation</div>
+        <div class="feature-desc">Watch your drone execute its algorithm in a physics-aware 3D environment with terrain, wind, and obstacle models rendered in real time.</div>
+        <div class="feature-tag">WebGL Accelerated</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📡</div>
+        <div class="feature-title">Real-time Telemetry</div>
+        <div class="feature-desc">Monitor altitude, velocity, heading, battery drain, PID loop output, and sensor fusion data as your simulation runs live on screen.</div>
+        <div class="feature-tag">Live Dashboard</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">Failure Mode Detection</div>
+        <div class="feature-desc">Pathfinder automatically identifies edge cases — sensor failures, GPS drift, motor imbalances — and shows how your algorithm responds under stress.</div>
+        <div class="feature-tag">Safety First</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗺️</div>
+        <div class="feature-title">Environment Builder</div>
+        <div class="feature-desc">Build custom flight environments: urban corridors, forests, warehouses, GPS-denied zones, or open fields. Configure wind, rain, and visibility parameters.</div>
+        <div class="feature-tag">Scenario Library</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Performance Reports</div>
+        <div class="feature-desc">Export detailed PDF reports of simulation runs. Compare algorithm iterations side by side. Track improvements across your entire simulation history.</div>
+        <div class="feature-tag">Export Ready</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-it-works" id="how">
+    <div class="section-header">
+      <div class="section-eyebrow">// WORKFLOW</div>
+      <h2 class="section-title">From code to <em>simulation</em><br>in four steps</h2>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-title">Upload Algorithm</div>
+        <div class="step-desc">Paste or upload your Python autonomous control script — navigation, PID, swarm, or obstacle avoidance logic.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-title">AI Parses Code</div>
+        <div class="step-desc">Claude AI analyzes your code, extracts behavioral logic, flight parameters, and generates a simulation model automatically.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-title">Configure Environment</div>
+        <div class="step-desc">Select terrain, weather conditions, obstacles, and sensor profiles. Define your test mission objectives.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-title">Run & Analyze</div>
+        <div class="step-desc">Watch your drone fly, monitor live telemetry, detect failure modes, and export full performance reports.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section class="use-cases" id="use-cases">
+    <div class="section-header">
+      <div class="section-eyebrow">// WHO IT'S FOR</div>
+      <h2 class="section-title">Built for every<br><em>drone builder</em></h2>
+    </div>
+
+    <div class="cases-grid">
+      <div class="case-card">
+        <div class="case-icon-wrap">🏭</div>
+        <div class="case-content">
+          <h3>Commercial Manufacturers</h3>
+          <p>Validate autonomous flight algorithms across hundreds of scenarios before hardware integration. Reduce R&D cycles by 60% and catch failures before they cost you.</p>
+          <span class="case-tag tag-cyan">Enterprise</span>
+        </div>
+      </div>
+      <div class="case-card">
+        <div class="case-icon-wrap">🔬</div>
+        <div class="case-content">
+          <h3>Academic Researchers</h3>
+          <p>Test swarm algorithms, novel navigation approaches, and AI-based flight controllers in a reproducible simulation environment with full data export for publications.</p>
+          <span class="case-tag tag-amber">Research</span>
+        </div>
+      </div>
+      <div class="case-card">
+        <div class="case-icon-wrap">🛠️</div>
+        <div class="case-content">
+          <h3>Hobbyists & Makers</h3>
+          <p>You built it — now fly it safely. Simulate your custom drone's control code before the first real test flight. Get instant AI feedback on algorithm quality.</p>
+          <span class="case-tag tag-green">Hobbyist</span>
+        </div>
+      </div>
+      <div class="case-card">
+        <div class="case-icon-wrap">🚁</div>
+        <div class="case-content">
+          <h3>Defense & Inspection</h3>
+          <p>Mission-critical autonomous operations demand perfect algorithms. Test GPS-denied navigation, thermal avoidance, and multi-drone coordination without real-world risk.</p>
+          <span class="case-tag tag-cyan">Mission Critical</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="pricing" id="pricing">
+    <div class="section-header">
+      <div class="section-eyebrow">// PRICING</div>
+      <h2 class="section-title">Start free.<br><em>Scale when ready.</em></h2>
+      <p class="section-desc">No credit card required. Every plan includes the core simulator.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="plan-name">Hobbyist</div>
+        <div class="price"><span>$</span>0</div>
+        <div class="price-note">Forever free</div>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> 5 simulations/month</li>
+          <li><span class="check">✓</span> Basic 3D environment</li>
+          <li><span class="check">✓</span> AI algorithm analysis</li>
+          <li><span class="check">✓</span> Core telemetry</li>
+          <li class="muted"><span class="check">✗</span> Custom environments</li>
+          <li class="muted"><span class="check">✗</span> PDF export</li>
+          <li class="muted"><span class="check">✗</span> Team collaboration</li>
+        </ul>
+        <a href="auth.html?mode=signup&plan=free" class="btn btn-ghost" style="width:100%;justify-content:center;">Get Started Free</a>
+      </div>
+
+      <div class="pricing-card featured">
+        <div class="plan-name">Pro</div>
+        <div class="price"><span>$</span>29</div>
+        <div class="price-note">per month</div>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> Unlimited simulations</li>
+          <li><span class="check">✓</span> Full 3D environment suite</li>
+          <li><span class="check">✓</span> Advanced AI analysis</li>
+          <li><span class="check">✓</span> Full telemetry dashboard</li>
+          <li><span class="check">✓</span> Custom environments</li>
+          <li><span class="check">✓</span> PDF export & reports</li>
+          <li class="muted"><span class="check">✗</span> Team collaboration</li>
+        </ul>
+        <a href="auth.html?mode=signup&plan=pro" class="btn btn-primary" style="width:100%;justify-content:center;">Start Pro Trial</a>
+      </div>
+
+      <div class="pricing-card">
+        <div class="plan-name">Enterprise</div>
+        <div class="price"><span style="font-size:28px">Let's<br>Talk</span></div>
+        <div class="price-note">Custom pricing</div>
+        <div class="plan-divider"></div>
+        <ul class="plan-features">
+          <li><span class="check">✓</span> Everything in Pro</li>
+          <li><span class="check">✓</span> Team workspaces</li>
+          <li><span class="check">✓</span> SSO / SAML auth</li>
+          <li><span class="check">✓</span> API access</li>
+          <li><span class="check">✓</span> Custom integrations</li>
+          <li><span class="check">✓</span> SLA & dedicated support</li>
+          <li><span class="check">✓</span> On-premise option</li>
+        </ul>
+        <a href="mailto:hello@pathfinder.aero" class="btn btn-ghost" style="width:100%;justify-content:center;">Contact Sales</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BANNER -->
+  <section class="cta-banner">
+    <div class="cta-inner">
+      <div class="cta-glow"></div>
+      <h2>Your algorithm is ready.<br>Is your drone?</h2>
+      <p>Simulate it first. Fly it confidently.</p>
+      <div class="cta-actions">
+        <a href="auth.html?mode=signup" class="btn btn-primary btn-lg">⬡ Launch Free Simulator</a>
+        <a href="simulator.html" class="btn btn-outline-cyan btn-lg">▶ Try the Demo</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">⬡ PATHFINDER</div>
+    <ul class="footer-links">
+      <li><a href="#">Docs</a></li>
+      <li><a href="#">API</a></li>
+      <li><a href="#">Blog</a></li>
+      <li><a href="#">Privacy</a></li>
+      <li><a href="#">Terms</a></li>
+    </ul>
+    <div class="footer-copy">© 2025 PATHFINDER. MIT LICENSED.</div>
+  </footer>
+
+  <script>
+    // ── HERO CANVAS SIMULATION ──
+    const canvas = document.getElementById('heroCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, animId;
+    let t = 0;
+    const waypoints = [];
+    const trail = [];
+    let wpIdx = 0;
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      W = canvas.width;
+      H = canvas.height;
+      buildWaypoints();
+    }
+
+    function buildWaypoints() {
+      waypoints.length = 0;
+      const margin = 60;
+      const count = 8;
+      for (let i = 0; i < count; i++) {
+        waypoints.push({
+          x: margin + Math.random() * (W - margin * 2),
+          y: margin + Math.random() * (H - margin * 2)
+        });
+      }
+    }
+
+    const drone = { x: 0, y: 0, heading: 0, speed: 1.2 };
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(0,212,255,0.04)';
+      ctx.lineWidth = 1;
+      const step = 40;
+      for (let x = 0; x < W; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += step) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+
+    function drawWaypoints() {
+      waypoints.forEach((wp, i) => {
+        const isNext = i === wpIdx;
+        const isPast = i < wpIdx;
+        const r = isNext ? 8 : 5;
+        ctx.beginPath();
+        ctx.arc(wp.x, wp.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = isPast ? 'rgba(16,185,129,0.4)' : isNext ? 'rgba(0,212,255,0.9)' : 'rgba(0,212,255,0.3)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (isNext) {
+          ctx.beginPath();
+          ctx.arc(wp.x, wp.y, r + 6, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(0,212,255,${0.15 + 0.1 * Math.sin(t * 0.05)})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        if (!isPast && i < waypoints.length - 1) {
+          const next = waypoints[i + 1];
+          ctx.beginPath();
+          ctx.setLineDash([4, 6]);
+          ctx.moveTo(wp.x, wp.y);
+          ctx.lineTo(next.x, next.y);
+          ctx.strokeStyle = 'rgba(0,212,255,0.1)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+    }
+
+    function drawTrail() {
+      if (trail.length < 2) return;
+      for (let i = 1; i < trail.length; i++) {
+        const alpha = (i / trail.length) * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+        ctx.lineTo(trail[i].x, trail[i].y);
+        ctx.strokeStyle = `rgba(0,212,255,${alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    function drawDrone(x, y, heading) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(heading);
+
+      // Body
+      ctx.beginPath();
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,212,255,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Arms
+      const arms = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+      arms.forEach(([sx, sy]) => {
+        ctx.beginPath();
+        ctx.moveTo(sx * 2, sy * 2);
+        ctx.lineTo(sx * 12, sy * 12);
+        ctx.strokeStyle = 'rgba(0,212,255,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Rotors
+        ctx.save();
+        ctx.translate(sx * 14, sy * 14);
+        ctx.rotate(t * 0.15);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 6, 2, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,212,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Heading indicator
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -14);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function update() {
+      if (wpIdx >= waypoints.length) {
+        wpIdx = 0;
+        buildWaypoints();
+        trail.length = 0;
+      }
+      const target = waypoints[wpIdx];
+      const dx = target.x - drone.x;
+      const dy = target.y - drone.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 12) {
+        wpIdx++;
+      } else {
+        const angle = Math.atan2(dy, dx) + Math.PI / 2;
+        drone.heading = lerp(drone.heading, angle, 0.06);
+        drone.x += Math.cos(Math.atan2(dy, dx)) * drone.speed * 1.8;
+        drone.y += Math.sin(Math.atan2(dy, dx)) * drone.speed * 1.8;
+      }
+
+      trail.push({ x: drone.x, y: drone.y });
+      if (trail.length > 120) trail.shift();
+
+      // Update HUD
+      const spd = (10 + wpIdx * 0.4).toFixed(1);
+      const alt = (48 + Math.sin(t * 0.02) * 3).toFixed(1);
+      document.getElementById('hudSpd').textContent = spd + ' m/s';
+      document.getElementById('hudAlt').textContent = alt + 'm';
+    }
+
+    function init() {
+      const start = waypoints[0] || { x: W / 2, y: H / 2 };
+      drone.x = start.x;
+      drone.y = start.y;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      drawGrid();
+
+      // Scanline effect
+      for (let y = 0; y < H; y += 4) {
+        ctx.fillStyle = 'rgba(0,0,0,0.06)';
+        ctx.fillRect(0, y, W, 2);
+      }
+
+      drawWaypoints();
+      drawTrail();
+      drawDrone(drone.x, drone.y, drone.heading);
+      t++;
+    }
+
+    function loop() {
+      update();
+      draw();
+      animId = requestAnimationFrame(loop);
+    }
+
+    resize();
+    init();
+    loop();
+    window.addEventListener('resize', () => {
+      resize();
+      init();
+    });
+  </script>
+</body>
+</html>

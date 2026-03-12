@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pathfinder — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #050810;
+      --bg2: #080d1a;
+      --surface: #0d1424;
+      --border: #1a2540;
+      --cyan: #00d4ff;
+      --cyan-dim: rgba(0,212,255,0.12);
+      --amber: #f59e0b;
+      --green: #10b981;
+      --red: #ef4444;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --text-mid: #94a3b8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+    .auth-layout {
+      display: flex;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── LEFT PANEL ── */
+    .auth-left {
+      width: 480px;
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 48px;
+    }
+    .auth-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      text-decoration: none;
+      margin-bottom: 64px;
+    }
+    .form-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .auth-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: 12px;
+    }
+    .auth-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .auth-sub {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 40px;
+    }
+
+    /* TABS */
+    .auth-tabs {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 32px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      background: none;
+      border: none;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--surface);
+      color: var(--cyan);
+    }
+
+    /* FORM */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: 'Exo 2', sans-serif;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input::placeholder { color: var(--text-dim); }
+    .form-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+    }
+    .form-input.error { border-color: var(--red); }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .forgot-link {
+      text-align: right;
+      margin-top: -12px;
+      margin-bottom: 20px;
+    }
+    .forgot-link a {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .forgot-link a:hover { color: var(--cyan); }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--cyan);
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #000;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .submit-btn:hover {
+      background: transparent;
+      color: var(--cyan);
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .submit-btn .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .submit-btn.loading .spinner { display: block; }
+    .submit-btn.loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .divider span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .oauth-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: 'Exo 2', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-mid);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .oauth-btn:hover {
+      border-color: var(--cyan);
+      color: var(--text);
+    }
+
+    .alert-box {
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .alert-box.error {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+      display: block;
+    }
+    .alert-box.success {
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #6ee7b7;
+      display: block;
+    }
+
+    /* ── RIGHT PANEL ── */
+    .auth-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px;
+      position: relative;
+      overflow: hidden;
+    }
+    .auth-glow {
+      position: absolute;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      pointer-events: none;
+    }
+    .auth-visual {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+    .auth-visual-canvas {
+      width: 340px;
+      height: 340px;
+      display: block;
+      margin: 0 auto;
+    }
+    .auth-pitch {
+      margin-top: 40px;
+    }
+    .auth-pitch h2 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .auth-pitch p {
+      font-size: 15px;
+      color: var(--text-dim);
+      font-weight: 300;
+      line-height: 1.6;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+    .auth-features {
+      display: flex;
+      gap: 24px;
+      margin-top: 32px;
+      justify-content: center;
+    }
+    .auth-feat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .auth-feat-dot { color: var(--cyan); }
+  </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<div class="auth-layout">
+  <!-- LEFT: FORM -->
+  <div class="auth-left">
+    <a href="index.html" class="auth-logo">
+      <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+        <polygon points="16,2 26,8 26,24 16,30 6,24 6,8" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.4"/>
+        <polygon points="16,6 22,10 22,22 16,26 10,22 10,10" stroke="#00d4ff" stroke-width="1" fill="none" opacity="0.7"/>
+        <circle cx="16" cy="16" r="4" fill="#00d4ff"/>
+      </svg>
+      PATHFINDER
+    </a>
+
+    <div class="form-area">
+      <div class="auth-eyebrow">// SECURE ACCESS</div>
+      <h1 class="auth-title" id="authTitle">Welcome Back</h1>
+      <p class="auth-sub" id="authSub">Sign in to your simulation workspace.</p>
+
+      <div class="auth-tabs">
+        <button class="tab-btn active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+        <button class="tab-btn" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
+      </div>
+
+      <div id="alertBox" class="alert-box"></div>
+
+      <!-- LOGIN FORM -->
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required />
+        </div>
+        <div class="forgot-link">
+          <a href="#" onclick="handleForgotPassword()">Forgot password?</a>
+        </div>
+        <button type="submit" class="submit-btn" id="loginBtn">
+          <div class="spinner"></div>
+          <span class="btn-text">Sign In</span>
+        </button>
+      </form>
+
+      <!-- SIGNUP FORM -->
+      <form id="signupForm" style="display:none;" onsubmit="handleSignup(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" class="form-input" id="signupFirst" placeholder="Alex" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" class="form-input" id="signupLast" placeholder="Chen" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" class="form-input" id="signupEmail" placeholder="you@example.com" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="signupPassword" placeholder="Min. 8 characters" minlength="8" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-input" id="signupRole">
+            <option value="hobbyist">Hobbyist / Maker</option>
+            <option value="researcher">Researcher / Academic</option>
+            <option value="manufacturer">Drone Manufacturer</option>
+            <option value="defense">Defense / Inspection</option>
+          </select>
+        </div>
+        <button type="submit" class="submit-btn" id="signupBtn">
+          <div class="spinner"></div>
+          <span class="btn-text">Create Account</span>
+        </button>
+      </form>
+
+      <div class="divider"><span>OR</span></div>
+
+      <button class="oauth-btn" onclick="handleGitHub()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+        Continue with GitHub
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT: VISUAL -->
+  <div class="auth-right">
+    <div class="auth-glow"></div>
+    <div class="auth-visual">
+      <canvas class="auth-visual-canvas" id="authCanvas"></canvas>
+      <div class="auth-pitch">
+        <h2>Test before you fly.</h2>
+        <p>Join drone engineers, researchers, and hobbyists using Pathfinder to simulate autonomous algorithms before real-world deployment.</p>
+        <div class="auth-features">
+          <div class="auth-feat"><span class="auth-feat-dot">⬡</span> AI Analysis</div>
+          <div class="auth-feat"><span class="auth-feat-dot">⬡</span> 3D Simulation</div>
+          <div class="auth-feat"><span class="auth-feat-dot">⬡</span> Live Telemetry</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── SUPABASE INIT ──
+  // Replace these with your Supabase project credentials
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ── URL PARAMS ──
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode');
+  if (mode === 'signup') switchTab('signup');
+
+  // ── TABS ──
+  function switchTab(tab) {
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const tabLogin = document.getElementById('tabLogin');
+    const tabSignup = document.getElementById('tabSignup');
+    const title = document.getElementById('authTitle');
+    const sub = document.getElementById('authSub');
+    clearAlert();
+    if (tab === 'login') {
+      loginForm.style.display = 'block';
+      signupForm.style.display = 'none';
+      tabLogin.classList.add('active');
+      tabSignup.classList.remove('active');
+      title.textContent = 'Welcome Back';
+      sub.textContent = 'Sign in to your simulation workspace.';
+    } else {
+      loginForm.style.display = 'none';
+      signupForm.style.display = 'block';
+      tabLogin.classList.remove('active');
+      tabSignup.classList.add('active');
+      title.textContent = 'Create Account';
+      sub.textContent = 'Start simulating your drone algorithms.';
+    }
+  }
+
+  function showAlert(msg, type = 'error') {
+    const box = document.getElementById('alertBox');
+    box.className = `alert-box ${type}`;
+    box.textContent = msg;
+  }
+  function clearAlert() {
+    const box = document.getElementById('alertBox');
+    box.className = 'alert-box';
+    box.textContent = '';
+  }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  // ── AUTH HANDLERS ──
+  async function handleLogin(e) {
+    e.preventDefault();
+    clearAlert();
+    setLoading('loginBtn', true);
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading('loginBtn', false);
+    if (error) {
+      showAlert(error.message);
+    } else {
+      window.location.href = 'dashboard.html';
+    }
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault();
+    clearAlert();
+    setLoading('signupBtn', true);
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    const first = document.getElementById('signupFirst').value;
+    const last = document.getElementById('signupLast').value;
+    const role = document.getElementById('signupRole').value;
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: {
+        data: { first_name: first, last_name: last, role }
+      }
+    });
+    setLoading('signupBtn', false);
+    if (error) {
+      showAlert(error.message);
+    } else {
+      showAlert('Check your email to confirm your account!', 'success');
+    }
+  }
+
+  async function handleForgotPassword() {
+    const email = document.getElementById('loginEmail').value;
+    if (!email) { showAlert('Enter your email address first.'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password.html'
+    });
+    if (error) showAlert(error.message);
+    else showAlert('Password reset email sent!', 'success');
+  }
+
+  async function handleGitHub() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: window.location.origin + '/dashboard.html' }
+    });
+    if (error) showAlert(error.message);
+  }
+
+  // Check session
+  (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) window.location.href = 'dashboard.html';
+  })();
+
+  // ── ROTATING DRONE CANVAS ──
+  const canvas = document.getElementById('authCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 340; canvas.height = 340;
+  let t = 0;
+  const cx = 170, cy = 170;
+
+  function drawFrame() {
+    ctx.clearRect(0, 0, 340, 340);
+
+    // Rings
+    [80, 120, 155].forEach((r, i) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,212,255,${0.06 + i * 0.02})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Sweep
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(t * 0.015);
+    const sweep = ctx.createConicalGradient ? null : null;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 155, -0.05, Math.PI * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(0,212,255,${0.04 + 0.01 * Math.sin(t * 0.03)})`;
+    ctx.fill();
+    ctx.restore();
+
+    // Orbit dots
+    const orbitR = 120;
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + t * 0.01;
+      const x = cx + orbitR * Math.cos(angle);
+      const y = cy + orbitR * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#00d4ff' : `rgba(0,212,255,0.3)`;
+      ctx.fill();
+    }
+
+    // Center drone
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.sin(t * 0.02) * 0.2);
+
+    // Body
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,212,255,0.1)';
+    ctx.fill();
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Cross arms
+    [0, 90, 180, 270].forEach(deg => {
+      const rad = deg * Math.PI / 180;
+      ctx.save();
+      ctx.rotate(rad);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -36);
+      ctx.strokeStyle = 'rgba(0,212,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(0, -38);
+      ctx.rotate(t * 0.2);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 14, 4, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0,212,255,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+    });
+
+    ctx.restore();
+
+    t++;
+    requestAnimationFrame(drawFrame);
+  }
+  drawFrame();
+</script>
+</body>
+</html>
