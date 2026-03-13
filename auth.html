@@ -451,10 +451,38 @@
 
 <script>
   // ── SUPABASE INIT ──
-  // Replace these with your Supabase project credentials
   const SUPABASE_URL = 'https://gnogazdbejinsicjtbpn.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdub2dhemRiZWppbnNpY2p0YnBuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNDY1NTIsImV4cCI6MjA4ODkyMjU1Mn0.XW7McRsZs7TsjAVffU9hAHJiLvozOsOxzAHcWrhDcuM';
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const SUPABASE_CONFIGURED = !SUPABASE_URL.includes('YOUR_');
+
+  let sbClient = null;
+  try {
+    if (SUPABASE_CONFIGURED) {
+      sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+  } catch(e) {
+    console.warn('Supabase not configured — running in demo mode.');
+  }
+
+  // Show demo banner if Supabase not set up
+  if (!SUPABASE_CONFIGURED) {
+    const banner = document.createElement('div');
+    banner.style.cssText = `
+      position:fixed; top:0; left:0; right:0; z-index:999;
+      background: rgba(245,158,11,0.12); border-bottom: 1px solid rgba(245,158,11,0.35);
+      padding: 10px 24px; display:flex; align-items:center; justify-content:space-between;
+      font-family:'JetBrains Mono',monospace; font-size:12px; color:#f59e0b;
+    `;
+    banner.innerHTML = `
+      <span>⚠ DEMO MODE — Supabase not configured. Auth is disabled.</span>
+      <a href="simulator.html" style="
+        background:#f59e0b; color:#000; padding:6px 16px; border-radius:4px;
+        font-weight:700; letter-spacing:0.08em; text-decoration:none; font-size:11px;
+      ">SKIP TO SIMULATOR →</a>
+    `;
+    document.body.prepend(banner);
+  }
 
   // ── URL PARAMS ──
   const params = new URLSearchParams(window.location.search);
@@ -508,45 +536,56 @@
   async function handleLogin(e) {
     e.preventDefault();
     clearAlert();
+    if (!SUPABASE_CONFIGURED) {
+      showAlert('Supabase not configured. Click "Skip to Simulator" in the banner above to test the app.', 'error');
+      return;
+    }
     setLoading('loginBtn', true);
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading('loginBtn', false);
-    if (error) {
-      showAlert(error.message);
-    } else {
-      window.location.href = 'dashboard.html';
+    try {
+      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+      setLoading('loginBtn', false);
+      if (error) showAlert(error.message);
+      else window.location.href = 'dashboard.html';
+    } catch(e) {
+      setLoading('loginBtn', false);
+      showAlert('Connection error. Check your Supabase credentials.');
     }
   }
 
   async function handleSignup(e) {
     e.preventDefault();
     clearAlert();
+    if (!SUPABASE_CONFIGURED) {
+      showAlert('Supabase not configured. Click "Skip to Simulator" in the banner above to test the app.', 'error');
+      return;
+    }
     setLoading('signupBtn', true);
     const email = document.getElementById('signupEmail').value;
     const password = document.getElementById('signupPassword').value;
     const first = document.getElementById('signupFirst').value;
     const last = document.getElementById('signupLast').value;
     const role = document.getElementById('signupRole').value;
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: {
-        data: { first_name: first, last_name: last, role }
-      }
-    });
-    setLoading('signupBtn', false);
-    if (error) {
-      showAlert(error.message);
-    } else {
-      showAlert('Check your email to confirm your account!', 'success');
+    try {
+      const { data, error } = await sbClient.auth.signUp({
+        email, password,
+        options: { data: { first_name: first, last_name: last, role } }
+      });
+      setLoading('signupBtn', false);
+      if (error) showAlert(error.message);
+      else showAlert('Check your email to confirm your account!', 'success');
+    } catch(e) {
+      setLoading('signupBtn', false);
+      showAlert('Connection error. Check your Supabase credentials.');
     }
   }
 
   async function handleForgotPassword() {
+    if (!SUPABASE_CONFIGURED) { showAlert('Supabase not configured.'); return; }
     const email = document.getElementById('loginEmail').value;
     if (!email) { showAlert('Enter your email address first.'); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await sbClient.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/reset-password.html'
     });
     if (error) showAlert(error.message);
@@ -554,18 +593,23 @@
   }
 
   async function handleGitHub() {
-    const { error } = await supabase.auth.signInWithOAuth({
+    if (!SUPABASE_CONFIGURED) { showAlert('Supabase not configured.'); return; }
+    const { error } = await sbClient.auth.signInWithOAuth({
       provider: 'github',
       options: { redirectTo: window.location.origin + '/dashboard.html' }
     });
     if (error) showAlert(error.message);
   }
 
-  // Check session
-  (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) window.location.href = 'dashboard.html';
-  })();
+  // Check session (only if Supabase is configured)
+  if (SUPABASE_CONFIGURED && supabase) {
+    (async () => {
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) window.location.href = 'dashboard.html';
+      } catch(e) {}
+    })();
+  }
 
   // ── ROTATING DRONE CANVAS ──
   const canvas = document.getElementById('authCanvas');
